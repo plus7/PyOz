@@ -6,7 +6,7 @@ from typing import NamedTuple
 import struct
 import math
 
-# 学習のためにozIMMU(https://github.com/enp1s0/ozIMMU)の条件を決め打ち(入力がdoubleのケースのみ考える)
+# 学習のためにozIMMU(https://github.com/enp1s0/ozIMMU)の条件を決め打ち(入力の型はdouble、alphaとbetaは1.0と0.0決め打ち)
 # してPythonに縮小移植したもの。ログ出力は除去していないし直訳臭いところもまだたくさんある。
 
 OP_N=0
