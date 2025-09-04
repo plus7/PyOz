@@ -1,3 +1,5 @@
+！！！注意！2025/9/4の時点では人が使えるような状態ではありません！！！
+
 # これは何？
 最近のNVIDIA GPUにあるTensorCoreの整数演算機能を活用してOzaki Schemeを実装した
 [ozIMMU](https://github.com/enp1s0/ozIMMU)というライブラリがあります。このソースを見ながら、
