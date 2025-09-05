@@ -190,6 +190,58 @@ def split_AB_int8(A, B, num_split, bits_per_int8):
     ret_b = split_int8_A(B, MATRIX_B, ld_int8_b, num_split, bits_per_int8)
     return (ret_a, ret_b)
 
+def get_mantissa_loss_total(M, mat_type, mantissa_length, bag):
+    m,n = M.shape
+    min_num_split = 3
+    max_num_split = 18
+
+    if bag == None:
+        result = {} # compute_mode_t vs uint64_t
+        for mode in range(3, 19):
+           result[mode] = 0
+    else:
+        result = bag
+
+    if mat_type == MATRIX_A:
+        row_size = m
+        col_size = n
+    else:
+        row_size = n
+        col_size = m
+
+    for row_index in range(0, row_size):
+        if mat_type == MATRIX_A:
+            row = M[row_index]
+        else:
+            row = M.T[row_index]
+        exps = [reinterpret_as_fp(mask_exponent(x)) for x in row]
+        max_exp = 2 * max(exps)
+
+        for a in row:
+            if a == 0 or max_exp == 0:
+                continue
+            required_mantissa_space_length = ((mask_exponent(max_exp) - mask_exponent(a)) >> 52) + 53
+            for num_split in range(min_num_split, max_num_split+1):
+                mantissa_loss_length = 0
+                mantissa_space_length = num_split * mantissa_length
+                if mantissa_space_length < required_mantissa_space_length:
+                    mantissa_loss_length = required_mantissa_space_length - mantissa_space_length
+
+                result[num_split] += mantissa_loss_length
+    return result
+
+def auto_mode_select(A, B, mantissa_loss_threshold):
+  m,k = A.shape
+  k,n = B.shape
+  bits_per_int8 = get_bits_per_int8(k)
+  bag = get_mantissa_loss_total(A, MATRIX_A, bits_per_int8, None)
+  dist = get_mantissa_loss_total(B, MATRIX_B, bits_per_int8, bag)
+
+  for mode in range(3, 19):
+    if dist[mode] / float(m * k + k * n) <= mantissa_loss_threshold:
+        return mode
+  return -1 # dgemm
+
 def accumulate_in_f64(C, C_int, mantissa_rshift):
   scale = reinterpret_as_fp( int( (double_bias - mantissa_rshift) ) << double_mantissa_size )
   m, n = C.shape
@@ -198,7 +250,7 @@ def accumulate_in_f64(C, C_int, mantissa_rshift):
       C[mi][ni] = C[mi][ni] + float(int(C_int[mi][ni]) << 32) * scale
       print("tid", mi,ni, "f64", C[mi][ni], "i32", int(C_int[mi][ni]), "i64", int(C_int[mi][ni]))
 
-def axby(C, a_max_exp, b_max_exp):
+def axby(C, a_max_exp, b_max_exp): # alpha=1.0, beta=0.0決め打ち
   m,n = C.shape
   NewC = np.zeros((m, n))
 
@@ -209,6 +261,7 @@ def axby(C, a_max_exp, b_max_exp):
 
 def gemm(A, B):
     compute_mode = 3 # fp64_int8_3
+    compute_mode = auto_mode_select(A, B, 0.0)
     # type check
     if not isinstance(A, np.ndarray):
         raise "type error"
