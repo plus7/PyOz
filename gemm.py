@@ -69,6 +69,7 @@ def get_split_config(compute_mode):
 
     return SplitConfig(matrix_A_split_types=split_types, matrix_B_split_types=split_types, gemm_pair_config_list=gemm_pair_list)
 
+# Python版では使わない関数たち ここから
 def padded_ld(n):
     # 4: sizeof(uint32_t)
     # 1: sizeof(int8_t)
@@ -89,7 +90,8 @@ def get_slice_num_elements(M, op):
     else:
         tmp = m
     return get_slice_ld(M, op) * tmp
-    
+# Python版では使わない関数たち ここまで
+
 double_mantissa_size = 52
 double_exponent_size = 11
 double_bias = 0x3ff
@@ -128,7 +130,6 @@ def cut_int8(a, max_exp, num_split, mantissa_length):
   mantissa_shift_offset = (reinterpret_as_uint(max_exp) - mask_exponent(a)) >> double_mantissa_size
   shifted_mantissa = mantissa >> mantissa_shift_offset
 
-  # B no mantissa_shift_offset is wrong
   #print("a, max_exp, mantissa, mantissa_shift_offset, shifted_mantissa", a, max_exp, uint128_str(mantissa), mantissa_shift_offset, uint128_str(shifted_mantissa))
 
   out = []
@@ -139,7 +140,7 @@ def cut_int8(a, max_exp, num_split, mantissa_length):
       else:
           sign = -1
       int8 = (shifted_mantissa >> (16 * 8 - mantissa_length)) * sign
-      shifted_mantissa = (shifted_mantissa << mantissa_length) & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF # tabaityou nanode ueni shift shita bun kesanaito dame
+      shifted_mantissa = (shifted_mantissa << mantissa_length) & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF # Pythonのintは多倍長なので、上にシフトした分を意識して消さないとダメ
       out.append(int8)
   return out
 
