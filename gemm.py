@@ -56,7 +56,7 @@ def get_split_config(compute_mode):
     for i in range(0, num_split):
         split_types.append(SPLIT_TYPE_INT8)
 
-    print(split_types)
+    #print(split_types)
 
     gemm_pair_list = []
     for sum_ in range(2, num_split+2):
@@ -65,7 +65,7 @@ def get_split_config(compute_mode):
                 continue
             gemm_pair_list.append(GemmPairConfig(A_id=j, B_id=sum_ - j))
 
-    print(gemm_pair_list)
+    #print(gemm_pair_list)
 
     return SplitConfig(matrix_A_split_types=split_types, matrix_B_split_types=split_types, gemm_pair_config_list=gemm_pair_list)
 
@@ -129,7 +129,7 @@ def cut_int8(a, max_exp, num_split, mantissa_length):
   shifted_mantissa = mantissa >> mantissa_shift_offset
 
   # B no mantissa_shift_offset is wrong
-  print("a, max_exp, mantissa, mantissa_shift_offset, shifted_mantissa", a, max_exp, uint128_str(mantissa), mantissa_shift_offset, uint128_str(shifted_mantissa))
+  #print("a, max_exp, mantissa, mantissa_shift_offset, shifted_mantissa", a, max_exp, uint128_str(mantissa), mantissa_shift_offset, uint128_str(shifted_mantissa))
 
   out = []
 
@@ -145,14 +145,15 @@ def cut_int8(a, max_exp, num_split, mantissa_length):
 
 def split_int8_A(A, mat_type, ldo, num_split, mantissa_length):
     m, n = A.shape
-    print("m, n, ldo, num_split, mantissa_length", m, n, ldo, num_split, mantissa_length)
+    #print("m, n, ldo, num_split, mantissa_length", m, n, ldo, num_split, mantissa_length)
     slices = []
     max_exps = []
     for i in range(0, num_split):
-      if mat_type == MATRIX_A:
-        slices.append(np.zeros((m, ldo))) # m, n no docchika ldo ni suru hitsuyou ari
-      else:
-        slices.append(np.zeros((ldo, n))) # m, n no docchika ldo ni suru hitsuyou ari
+       slices.append(np.zeros((m, n)))
+      #if mat_type == MATRIX_A:
+      #  slices.append(np.zeros((m, ldo))) # m, n no docchika ldo ni suru hitsuyou ari
+      #else:
+      #  slices.append(np.zeros((ldo, n))) # m, n no docchika ldo ni suru hitsuyou ari
     #print(slices)
 
     if mat_type == MATRIX_A:
@@ -180,7 +181,7 @@ def split_int8_A(A, mat_type, ldo, num_split, mantissa_length):
                 slices[j][i, row_index] = out[j]
 
         max_exps.append(max_exp)
-    print(slices, max_exps)
+    #print(slices, max_exps)
     return (slices, max_exps)
 
 def split_AB_int8(A, B, num_split, bits_per_int8):
@@ -190,17 +191,17 @@ def split_AB_int8(A, B, num_split, bits_per_int8):
     ret_b = split_int8_A(B, MATRIX_B, ld_int8_b, num_split, bits_per_int8)
     return (ret_a, ret_b)
 
-def get_mantissa_loss_total(M, mat_type, mantissa_length, bag):
+def get_mantissa_loss_total(M, mat_type, mantissa_length, dist0):
     m,n = M.shape
     min_num_split = 3
     max_num_split = 18
 
-    if bag == None:
+    if dist0 == None:
         result = {} # compute_mode_t vs uint64_t
         for mode in range(3, 19):
            result[mode] = 0
     else:
-        result = bag
+        result = dist0
 
     if mat_type == MATRIX_A:
         row_size = m
@@ -234,8 +235,8 @@ def auto_mode_select(A, B, mantissa_loss_threshold):
   m,k = A.shape
   k,n = B.shape
   bits_per_int8 = get_bits_per_int8(k)
-  bag = get_mantissa_loss_total(A, MATRIX_A, bits_per_int8, None)
-  dist = get_mantissa_loss_total(B, MATRIX_B, bits_per_int8, bag)
+  dist0 = get_mantissa_loss_total(A, MATRIX_A, bits_per_int8, None)
+  dist = get_mantissa_loss_total(B, MATRIX_B, bits_per_int8, dist0)
 
   for mode in range(3, 19):
     if dist[mode] / float(m * k + k * n) <= mantissa_loss_threshold:
@@ -248,7 +249,7 @@ def accumulate_in_f64(C, C_int, mantissa_rshift):
   for mi in range(0, m):
     for ni in range(0, n):
       C[mi][ni] = C[mi][ni] + float(int(C_int[mi][ni]) << 32) * scale
-      print("tid", mi,ni, "f64", C[mi][ni], "i32", int(C_int[mi][ni]), "i64", int(C_int[mi][ni]))
+      #print("tid", mi,ni, "f64", C[mi][ni], "i32", int(C_int[mi][ni]), "i64", int(C_int[mi][ni]))
 
 def axby(C, a_max_exp, b_max_exp): # alpha=1.0, beta=0.0決め打ち
   m,n = C.shape
@@ -259,9 +260,11 @@ def axby(C, a_max_exp, b_max_exp): # alpha=1.0, beta=0.0決め打ち
       NewC[mi][ni] = C[mi][ni] / (1 << 44) * a_max_exp[mi] * b_max_exp[ni]
   return NewC
 
-def gemm(A, B):
-    compute_mode = 3 # fp64_int8_3
-    compute_mode = auto_mode_select(A, B, 0.0)
+def gemm(A, B, compute_mode=-1):
+    #compute_mode = 3 # fp64_int8_3
+    if compute_mode == -1:
+       compute_mode = auto_mode_select(A, B, 0.0)
+    print("compute_mode = {}".format(compute_mode))
     # type check
     if not isinstance(A, np.ndarray):
         raise "type error"
@@ -298,28 +301,28 @@ def gemm(A, B):
         Ai = a_int8_slices[0][gemm_pair_config.A_id-1]
         Bi = b_int8_slices[0][gemm_pair_config.B_id-1]
         C_int = Ai @ Bi
-        print(C_int)
+        #print(C_int)
         accumulate_in_f64(C, C_int, bits_per_int8 * (gemm_pair_config.A_id + gemm_pair_config.B_id - 2) - (7 - bits_per_int8) * 2)
 
-    print(C)
+    #print(C)
 
     a_max_exp = a_int8_slices[1]
     b_max_exp = b_int8_slices[1]
     return axby(C, a_max_exp, b_max_exp) # alpha = 1.0 beta = 0.0
 
 if __name__ == "__main__":
-    test_get_bits_per_int8()
-    np.random.seed(0)
-    #A = (np.random.randn(2, 2)).astype(np.float64)
-    #B = (np.random.randn(2, 2)).astype(np.float64)
+    #np.random.seed(0)
+    A = (np.random.randn(4, 4)).astype(np.float64)
+    B = (np.random.randn(4, 4)).astype(np.float64)
     #A = np.array([[1.0, 3.0], [2.0, 4.0]]).astype(np.float64)
     #B = np.array([[5.0, 7.0], [6.0, 8.0]]).astype(np.float64)
-    A = np.array([[1.0, 4.0, 7.0, 10.0], [2.0, 5.0, 8.0, 11.0], [3.0, 6.0, 9.0, 12.0]]).astype(np.float64)
-    B = np.array([[13.0, 17.0, 21.0], [256.0, 18.0, 22.0], [15.0, 19.0, 512.0], [16.0, 20.0, 24.0]]).astype(np.float64)
+    #A = np.array([[1.0, 4.0, 7.0, 10.0], [2.0, 5.0, 8.0, 11.0], [3.0, 6.0, 9.0, 12.0]]).astype(np.float64)
+    #B = np.array([[13.0, 17.0, 21.0], [256.0, 18.0, 22.0], [15.0, 19.0, 512.0], [16.0, 20.0, 24.0]]).astype(np.float64)
 
     C_ozaki = gemm(A, B)
     print(C_ozaki)
     C_ref   = (A @ B)
+    print(C_ref)
 
     abs_err = np.max(np.abs(C_ozaki - C_ref))
     rel_err = abs_err / (np.max(np.abs(C_ref)) + 1e-16)
