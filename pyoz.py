@@ -261,13 +261,14 @@ def axby(C, a_max_exp, b_max_exp): # alpha=1.0, beta=0.0決め打ち
       NewC[mi][ni] = C[mi][ni] / (1 << 44) * a_max_exp[mi] * b_max_exp[ni]
   return NewC
 
-def gemm(A, B, compute_mode=-1):
+def gemm(A, B, compute_mode=-1, debug=False):
     #compute_mode = 3 # fp64_int8_3
     if compute_mode == -1:
        compute_mode = auto_mode_select(A, B, 0.0)
     if compute_mode < 3 or compute_mode > 18:
        raise "compute mode error"
-    print("compute_mode = {}".format(compute_mode))
+    if debug:
+       print("compute_mode = {}".format(compute_mode))
     # type check
     if not isinstance(A, np.ndarray):
         raise "type error (A)"
