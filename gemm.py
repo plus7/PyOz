@@ -265,18 +265,20 @@ def gemm(A, B, compute_mode=-1):
     #compute_mode = 3 # fp64_int8_3
     if compute_mode == -1:
        compute_mode = auto_mode_select(A, B, 0.0)
+    if compute_mode < 3 or compute_mode > 18:
+       raise "compute mode error"
     print("compute_mode = {}".format(compute_mode))
     # type check
     if not isinstance(A, np.ndarray):
-        raise "type error"
+        raise "type error (A)"
     if not isinstance(B, np.ndarray):
-        raise "type error"
+        raise "type error (B)"
     if A.ndim != 2 or B.ndim != 2:
         raise "dimension error"
     if A.dtype != np.float64:
-        raise "element type error"
+        raise "element type error (A)"
     if B.dtype != np.float64:
-        raise "element type error"
+        raise "element type error (B)"
 
     # shape check
     m_a,k_a = A.shape
